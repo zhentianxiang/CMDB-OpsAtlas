@@ -1,0 +1,290 @@
+services:
+  mysql:
+    image: mysql:8.0
+    container_name: cmdb-mysql
+    command: --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci
+    environment:
+      MYSQL_ROOT_PASSWORD: rootpassword
+      MYSQL_DATABASE: cmdb_auth
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./db_conf/my.cnf:/etc/mysql/conf.d/my.cnf
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-prootpassword"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  auth-service:
+    build:
+      context: .
+      dockerfile: services/auth-service/Dockerfile
+      #args:
+      #  # 构建镜像代理
+      #  HTTP_PROXY: http://192.168.10.2:7890
+      #  HTTPS_PROXY: http://192.168.10.2:7890
+    container_name: cmdb-auth-service
+    environment:
+      - DB_DSN=root:rootpassword@tcp(mysql:3306)/cmdb_auth?charset=utf8mb4&parseTime=True&loc=Local
+      - PORT=8080
+      - LOG_DIR=/app/logs
+      - AVATAR_DIR=/app/uploads/avatars
+    ports:
+      - "8081:8080"
+    volumes:
+      - ./logs:/app/logs
+      - ./uploads:/app/uploads
+    depends_on:
+      mysql:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8080/healthz"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  cluster-service:
+    build:
+      context: .
+      dockerfile: services/cluster-service/Dockerfile
+      #args:
+      #  # 构建镜像代理
+      #  HTTP_PROXY: http://192.168.10.2:7890
+      #  HTTPS_PROXY: http://192.168.10.2:7890
+    container_name: cmdb-cluster-service
+    environment:
+      - DB_DSN=root:rootpassword@tcp(mysql:3306)/cmdb_resource?charset=utf8mb4&parseTime=True&loc=Local
+      - PORT=8080
+      - LOG_DIR=/app/logs
+    ports:
+      - "8082:8080"
+    volumes:
+      - ./logs:/app/logs
+    depends_on:
+      mysql:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8080/healthz"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  host-service:
+    build:
+      context: .
+      dockerfile: services/host-service/Dockerfile
+      #args:
+      #  # 构建镜像代理
+      #  HTTP_PROXY: http://192.168.10.2:7890
+      #  HTTPS_PROXY: http://192.168.10.2:7890
+    container_name: cmdb-host-service
+    environment:
+      - DB_DSN=root:rootpassword@tcp(mysql:3306)/cmdb_resource?charset=utf8mb4&parseTime=True&loc=Local
+      - PORT=8080
+      - LOG_DIR=/app/logs
+    ports:
+      - "8083:8080"
+    volumes:
+      - ./logs:/app/logs
+    depends_on:
+      mysql:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8080/healthz"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  app-service:
+    build:
+      context: .
+      dockerfile: services/app-service/Dockerfile
+      #args:
+      #  # 构建镜像代理
+      #  HTTP_PROXY: http://192.168.10.2:7890
+      #  HTTPS_PROXY: http://192.168.10.2:7890
+    container_name: cmdb-app-service
+    environment:
+      - DB_DSN=root:rootpassword@tcp(mysql:3306)/cmdb_resource?charset=utf8mb4&parseTime=True&loc=Local
+      - PORT=8080
+      - LOG_DIR=/app/logs
+    ports:
+      - "8084:8080"
+    volumes:
+      - ./logs:/app/logs
+    depends_on:
+      mysql:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8080/healthz"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  port-service:
+    build:
+      context: .
+      dockerfile: services/port-service/Dockerfile
+      #args:
+      #  # 构建镜像代理
+      #  HTTP_PROXY: http://192.168.10.2:7890
+      #  HTTPS_PROXY: http://192.168.10.2:7890
+    container_name: cmdb-port-service
+    environment:
+      - DB_DSN=root:rootpassword@tcp(mysql:3306)/cmdb_resource?charset=utf8mb4&parseTime=True&loc=Local
+      - PORT=8080
+      - LOG_DIR=/app/logs
+    ports:
+      - "8085:8080"
+    volumes:
+      - ./logs:/app/logs
+    depends_on:
+      mysql:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8080/healthz"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  domain-service:
+    build:
+      context: .
+      dockerfile: services/domain-service/Dockerfile
+      #args:
+      #  # 构建镜像代理
+      #  HTTP_PROXY: http://192.168.10.2:7890
+      #  HTTPS_PROXY: http://192.168.10.2:7890
+    container_name: cmdb-domain-service
+    environment:
+      - DB_DSN=root:rootpassword@tcp(mysql:3306)/cmdb_resource?charset=utf8mb4&parseTime=True&loc=Local
+      - PORT=8080
+      - LOG_DIR=/app/logs
+    ports:
+      - "8086:8080"
+    volumes:
+      - ./logs:/app/logs
+    depends_on:
+      mysql:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8080/healthz"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  dependency-service:
+    build:
+      context: .
+      dockerfile: services/dependency-service/Dockerfile
+      #args:
+      #  # 构建镜像代理
+      #  HTTP_PROXY: http://192.168.10.2:7890
+      #  HTTPS_PROXY: http://192.168.10.2:7890
+    container_name: cmdb-dependency-service
+    environment:
+      - DB_DSN=root:rootpassword@tcp(mysql:3306)/cmdb_resource?charset=utf8mb4&parseTime=True&loc=Local
+      - PORT=8080
+      - LOG_DIR=/app/logs
+    ports:
+      - "8087:8080"
+    volumes:
+      - ./logs:/app/logs
+    depends_on:
+      mysql:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8080/healthz"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  topology-service:
+    build:
+      context: .
+      dockerfile: services/topology-service/Dockerfile
+      #args:
+      #  # 构建镜像代理
+      #  HTTP_PROXY: http://192.168.10.2:7890
+      #  HTTPS_PROXY: http://192.168.10.2:7890
+    container_name: cmdb-topology-service
+    environment:
+      - DB_DSN=root:rootpassword@tcp(mysql:3306)/cmdb_resource?charset=utf8mb4&parseTime=True&loc=Local
+      - PORT=8080
+      - LOG_DIR=/app/logs
+    ports:
+      - "8088:8080"
+    volumes:
+      - ./logs:/app/logs
+    depends_on:
+      mysql:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8080/healthz"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  cmdb-transfer-service:
+    build:
+      context: .
+      dockerfile: services/cmdb-transfer-service/Dockerfile
+      #args:
+      #  # 构建镜像代理
+      #  HTTP_PROXY: http://192.168.10.2:7890
+      #  HTTPS_PROXY: http://192.168.10.2:7890
+    container_name: cmdb-transfer-service
+    environment:
+      - DB_DSN=root:rootpassword@tcp(mysql:3306)/cmdb_resource?charset=utf8mb4&parseTime=True&loc=Local
+      - PORT=8080
+      - BACKUP_DIR=/app/backups
+      - LOG_DIR=/app/logs
+    ports:
+      - "8089:8080"
+    volumes:
+      - ./backups:/app/backups
+      - ./logs:/app/logs
+    depends_on:
+      mysql:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8080/healthz"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  frontend:
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
+      #args:
+      #  # 构建镜像代理
+      #  HTTP_PROXY: http://192.168.10.2:7890
+      #  HTTPS_PROXY: http://192.168.10.2:7890
+    container_name: cmdb-frontend
+    ports:
+      - "8090:80"
+    depends_on:
+      auth-service:
+        condition: service_healthy
+      cluster-service:
+        condition: service_healthy
+      host-service:
+        condition: service_healthy
+      app-service:
+        condition: service_healthy
+      port-service:
+        condition: service_healthy
+      domain-service:
+        condition: service_healthy
+      dependency-service:
+        condition: service_healthy
+      topology-service:
+        condition: service_healthy
+      cmdb-transfer-service:
+        condition: service_healthy
+
+volumes:
+  mysql_data:
