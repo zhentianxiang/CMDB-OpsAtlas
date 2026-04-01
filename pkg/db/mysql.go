@@ -3,6 +3,7 @@ package db
 import (
 	"fmt"
 	"log"
+	"reflect"
 	"strings"
 
 	"gorm.io/driver/mysql"
@@ -29,23 +30,43 @@ func InitMySQLAndMigrate(dsn string, migrateModels ...interface{}) *gorm.DB {
 	}
 
 	if len(migrateModels) > 0 {
-		if err := db.AutoMigrate(migrateModels...); err != nil {
-			// Multiple services may migrate the same table concurrently at startup.
-			// Ignore MySQL race errors like:
-			// 1050 table already exists, 1060 duplicate column.
-			errMsg := strings.ToLower(err.Error())
-			if strings.Contains(errMsg, "error 1050") ||
-				strings.Contains(errMsg, "error 1060") ||
-				strings.Contains(errMsg, "error 1061") ||
-				strings.Contains(errMsg, "already exists") ||
-				strings.Contains(errMsg, "duplicate column") ||
-				strings.Contains(errMsg, "duplicate key name") {
-				log.Printf("migration skipped due to concurrent create race: %v", err)
-			} else {
-				log.Fatalf("failed to migrate database: %v", err)
+		for _, model := range migrateModels {
+			if err := db.AutoMigrate(model); err != nil {
+				// Multiple services may migrate the same table concurrently at startup.
+				// Ignore MySQL race errors like:
+				// 1050 table already exists, 1060 duplicate column.
+				if isIgnorableMigrationError(err) {
+					log.Printf("migration skipped for %s due to concurrent create race: %v", modelName(model), err)
+					continue
+				}
+				log.Fatalf("failed to migrate %s: %v", modelName(model), err)
 			}
 		}
 	}
 
 	return db
+}
+
+func isIgnorableMigrationError(err error) bool {
+	errMsg := strings.ToLower(err.Error())
+	return strings.Contains(errMsg, "error 1050") ||
+		strings.Contains(errMsg, "error 1060") ||
+		strings.Contains(errMsg, "error 1061") ||
+		strings.Contains(errMsg, "already exists") ||
+		strings.Contains(errMsg, "duplicate column") ||
+		strings.Contains(errMsg, "duplicate key name")
+}
+
+func modelName(model interface{}) string {
+	if model == nil {
+		return "<nil>"
+	}
+	t := reflect.TypeOf(model)
+	for t.Kind() == reflect.Ptr {
+		t = t.Elem()
+	}
+	if t.Name() != "" {
+		return t.Name()
+	}
+	return t.String()
 }

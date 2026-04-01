@@ -82,7 +82,99 @@ func (h *Handler) buildExportPayload(uID uint, role string) (exportPayload, erro
 		return payload, &importError{message: "导出依赖失败: " + err.Error()}
 	}
 
+	payload = sanitizeExportPayload(payload)
 	return payload, nil
+}
+
+func sanitizeExportPayload(payload exportPayload) exportPayload {
+	clusterIDs := make(map[uint]struct{}, len(payload.Clusters))
+	for _, item := range payload.Clusters {
+		clusterIDs[item.ID] = struct{}{}
+	}
+
+	sanitizedHosts := make([]models.Host, 0, len(payload.Hosts))
+	hostIDs := make(map[uint]struct{}, len(payload.Hosts))
+	for _, item := range payload.Hosts {
+		if item.ClusterID != nil {
+			if _, ok := clusterIDs[*item.ClusterID]; !ok {
+				item.ClusterID = nil
+			}
+		}
+		sanitizedHosts = append(sanitizedHosts, item)
+		hostIDs[item.ID] = struct{}{}
+	}
+
+	sanitizedApps := make([]models.App, 0, len(payload.Apps))
+	appIDs := make(map[uint]struct{}, len(payload.Apps))
+	for _, item := range payload.Apps {
+		if _, ok := hostIDs[item.HostID]; !ok {
+			continue
+		}
+		sanitizedApps = append(sanitizedApps, item)
+		appIDs[item.ID] = struct{}{}
+	}
+
+	sanitizedPorts := make([]models.Port, 0, len(payload.Ports))
+	for _, item := range payload.Ports {
+		if _, ok := appIDs[item.AppID]; !ok {
+			continue
+		}
+		sanitizedPorts = append(sanitizedPorts, item)
+	}
+
+	sanitizedDomains := make([]models.Domain, 0, len(payload.Domains))
+	domainIDs := make(map[uint]struct{}, len(payload.Domains))
+	for _, item := range payload.Domains {
+		if item.AppID != nil {
+			if _, ok := appIDs[*item.AppID]; !ok {
+				item.AppID = nil
+			}
+		}
+		if item.HostID != nil {
+			if _, ok := hostIDs[*item.HostID]; !ok {
+				item.HostID = nil
+			}
+		}
+		sanitizedDomains = append(sanitizedDomains, item)
+		domainIDs[item.ID] = struct{}{}
+	}
+
+	sanitizedDependencies := make([]models.Dependency, 0, len(payload.Dependencies))
+	for _, item := range payload.Dependencies {
+		if item.SourceAppID != nil {
+			if _, ok := appIDs[*item.SourceAppID]; !ok {
+				item.SourceAppID = nil
+			}
+		}
+		if item.TargetAppID != nil {
+			if _, ok := appIDs[*item.TargetAppID]; !ok {
+				item.TargetAppID = nil
+			}
+		}
+		if item.SourceHostID != nil {
+			if _, ok := hostIDs[*item.SourceHostID]; !ok {
+				item.SourceHostID = nil
+			}
+		}
+		if item.TargetHostID != nil {
+			if _, ok := hostIDs[*item.TargetHostID]; !ok {
+				item.TargetHostID = nil
+			}
+		}
+		if item.DomainID != nil {
+			if _, ok := domainIDs[*item.DomainID]; !ok {
+				item.DomainID = nil
+			}
+		}
+		sanitizedDependencies = append(sanitizedDependencies, item)
+	}
+
+	payload.Hosts = sanitizedHosts
+	payload.Apps = sanitizedApps
+	payload.Ports = sanitizedPorts
+	payload.Domains = sanitizedDomains
+	payload.Dependencies = sanitizedDependencies
+	return payload
 }
 
 func (h *Handler) PreviewImportCMDB(c *gin.Context) {
