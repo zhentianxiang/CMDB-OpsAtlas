@@ -19,8 +19,11 @@ RUN CGO_ENABLED=0 go build -o auth-service services/auth-service/cmd/main.go
 # 运行阶段
 FROM alpine:latest
 RUN sed -i 's|https://dl-cdn.alpinelinux.org/alpine|https://mirrors.aliyun.com/alpine|g' /etc/apk/repositories \
-    && apk add --no-cache curl ca-certificates \
-    && update-ca-certificates
+    && apk add --no-cache curl ca-certificates tzdata \
+    && update-ca-certificates \
+    && ln -sf /usr/share/zoneinfo/Asia/Shanghai /etc/localtime \
+    && echo "Asia/Shanghai" > /etc/timezone
+ENV TZ=Asia/Shanghai
 
 WORKDIR /app
 

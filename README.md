@@ -1,4 +1,4 @@
-# CMDB v2
+# CMDB-OpsAtlas
 
 一个基于 `Go + Gin + GORM + MySQL + Vue 3 + vue-pure-admin + Docker Compose` 的轻量 CMDB 与运维管理平台。
 

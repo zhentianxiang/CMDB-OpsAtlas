@@ -15,6 +15,12 @@ RUN pnpm build
 
 FROM nginx:1.21.0 AS production-stage
 
+RUN apt-get update && \
+    apt-get install -y tzdata && \
+    ln -fs /usr/share/zoneinfo/Asia/Shanghai /etc/localtime && \
+    echo "Asia/Shanghai" > /etc/timezone
+ENV TZ=Asia/Shanghai
+
 COPY --from=build-stage /app/dist /usr/share/nginx/html
 COPY frontend/nginx/default.conf /etc/nginx/conf.d/default.conf
 EXPOSE 80

@@ -1,0 +1,18 @@
+# Logs
+logs/*.log
+!logs/.gitkeep
+
+# Backups
+backups/*
+!backups/.gitkeep
+
+# Uploads
+uploads/*
+!uploads/.gitkeep
+
+# Local environment files
+.env.local
+.env.*.local
+
+# OS files
+.DS_Store

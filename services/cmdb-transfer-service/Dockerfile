@@ -7,6 +7,7 @@ RUN CGO_ENABLED=0 go build -o cmdb-transfer-service services/cmdb-transfer-servi
 
 FROM mysql:8.0
 RUN microdnf install -y tzdata curl ca-certificates && microdnf clean all
+ENV TZ=Asia/Shanghai
 WORKDIR /app
 COPY --from=builder /app/cmdb-transfer-service .
 EXPOSE 8080
