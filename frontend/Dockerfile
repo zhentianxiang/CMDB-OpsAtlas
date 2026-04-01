@@ -15,10 +15,15 @@ RUN pnpm build
 
 FROM nginx:1.21.0 AS production-stage
 
-RUN apt-get update && \
-    apt-get install -y tzdata && \
+RUN sed -i 's/deb.debian.org/archive.debian.org/g' /etc/apt/sources.list && \
+    sed -i 's/security.debian.org/archive.debian.org/g' /etc/apt/sources.list && \
+    sed -i '/buster-updates/d' /etc/apt/sources.list && \
+    apt-get update && \
+    apt-get install -y --no-install-recommends tzdata && \
     ln -fs /usr/share/zoneinfo/Asia/Shanghai /etc/localtime && \
-    echo "Asia/Shanghai" > /etc/timezone
+    echo "Asia/Shanghai" > /etc/timezone && \
+    rm -rf /var/lib/apt/lists/*
+
 ENV TZ=Asia/Shanghai
 
 COPY --from=build-stage /app/dist /usr/share/nginx/html
