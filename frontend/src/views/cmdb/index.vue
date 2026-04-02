@@ -585,7 +585,7 @@ function getFieldSelectOptions(field: {
 }
 
 function formatAppOption(item: AppItem) {
-  return `${item.ID} - ${item.name}`;
+  return item.name;
 }
 
 function getSelectOptionLabel(
@@ -593,13 +593,13 @@ function getSelectOptionLabel(
   item: any
 ) {
   if (field.key === "domain_id") {
-    return `${item.ID} - ${item.domain}`;
+    return item.domain;
   }
   if ("ID" in item && "name" in item) {
     if ((field.optionsFrom === "apps" || field.key.includes("app_id")) && "host_id" in item) {
       return formatAppOption(item as AppItem);
     }
-    return `${item.ID} - ${item.name}`;
+    return item.name;
   }
   return item.label;
 }
@@ -800,32 +800,32 @@ function formatValue(key: ResourceKey, column: string, value: any) {
 
   if (key === "hosts" && column === "cluster_id") {
     const hit = listState.clusters.find(item => item.ID === value);
-    return hit ? `${value} (${hit.name})` : value;
+    return hit?.name || value;
   }
   if (key === "apps" && column === "host_id") {
     const hit = listState.hosts.find(item => item.ID === value);
-    return hit ? `${value} (${hit.name})` : value;
+    return hit?.name || value;
   }
   if (key === "ports" && column === "app_id") {
     const hit = listState.apps.find(item => item.ID === value);
-    return hit ? `${value} (${hit.name})` : value;
+    return hit?.name || value;
   }
   if (key === "domains" && (column === "host_id" || column === "app_id")) {
     const source = column === "host_id" ? listState.hosts : listState.apps;
     const hit = source.find(item => item.ID === value);
-    return hit ? `${value} (${hit.name})` : value;
+    return hit?.name || value;
   }
   if (key === "dependencies" && column === "domain_id") {
     const hit = listState.domains.find(item => item.ID === value);
-    return hit ? `${value} (${hit.domain})` : value;
+    return hit?.domain || value;
   }
   if (key === "dependencies" && column.endsWith("app_id")) {
     const hit = listState.apps.find(item => item.ID === value);
-    return hit ? `${value} (${hit.name})` : value;
+    return hit?.name || value;
   }
   if (key === "dependencies" && column.endsWith("host_id")) {
     const hit = listState.hosts.find(item => item.ID === value);
-    return hit ? `${value} (${hit.name})` : value;
+    return hit?.name || value;
   }
   return value;
 }
@@ -1295,9 +1295,9 @@ function formatDependencyEndpoint(item: DependencyItem, side: "source" | "target
   const appId = side === "source" ? item.source_app_id : item.target_app_id;
   const hostId = side === "source" ? item.source_host_id : item.target_host_id;
   const nodeText = side === "source" ? item.source_node : item.target_node;
-  if (appId) return `应用 ${appId} (${appMap.value.get(appId)?.name || "-"})`;
-  if (hostId) return `主机 ${hostId} (${hostMap.value.get(hostId)?.name || "-"})`;
-  if (nodeText && nodeText.trim()) return `外部节点 ${nodeText.trim()}`;
+  if (appId) return appMap.value.get(appId)?.name || "-";
+  if (hostId) return hostMap.value.get(hostId)?.name || "-";
+  if (nodeText && nodeText.trim()) return nodeText.trim();
   return "-";
 }
 
@@ -1603,7 +1603,7 @@ function getEntityIdForDomain(item: DomainItem) {
               <el-option
                 v-for="item in listState.hosts"
                 :key="item.ID"
-                :label="`${item.ID} - ${item.name}`"
+                :label="item.name"
                 :value="item.ID"
               />
             </el-select>
@@ -1662,7 +1662,7 @@ function getEntityIdForDomain(item: DomainItem) {
               <el-option
                 v-for="item in listState.clusters"
                 :key="item.ID"
-                :label="`${item.ID} - ${item.name}`"
+                :label="item.name"
                 :value="item.ID"
               />
             </el-select>
