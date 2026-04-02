@@ -30,15 +30,6 @@ export default {
       }
     },
     {
-      path: "/ops/tasks",
-      name: "OpsTasks",
-      component: () => import("@/views/ops/tasks.vue"),
-      meta: {
-        title: "任务中心",
-        auths: "ops:task:view"
-      }
-    },
-    {
       path: "/ops/backup",
       name: "OpsBackup",
       component: () => import("@/views/cmdb/ops/backup.vue"),

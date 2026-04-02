@@ -1,14 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from "vue";
-import dayjs from "dayjs";
-import {
-  getOpsOverview,
-  listTransferRecords,
-  type OpsOverviewData,
-  type TransferRecordItem
-} from "@/api/cmdb";
-import { getAuditLogs } from "@/api/system";
-import { hasPerms } from "@/utils/auth";
+import { getOpsOverview, type OpsOverviewData } from "@/api/cmdb";
 import { message } from "@/utils/message";
 
 defineOptions({
@@ -17,8 +9,6 @@ defineOptions({
 
 const loading = ref(false);
 const overview = ref<OpsOverviewData | null>(null);
-const transferLogs = ref<TransferRecordItem[]>([]);
-const auditLogs = ref<any[]>([]);
 
 const unhealthyCount = computed(
   () => overview.value?.services.filter(item => item.status !== "UP").length || 0
@@ -27,23 +17,13 @@ const unhealthyCount = computed(
 async function loadOverview() {
   try {
     loading.value = true;
-    const [overviewResp, transferResp, auditResp] = await Promise.all([
-      getOpsOverview(),
-      hasPerms("ops:logs:view") ? listTransferRecords() : Promise.resolve({ data: [] }),
-      hasPerms("ops:logs:view") ? getAuditLogs() : Promise.resolve({ data: { list: [] } })
-    ]);
+    const overviewResp = await getOpsOverview();
     overview.value = overviewResp.data;
-    transferLogs.value = (transferResp.data || []).slice(0, 6);
-    auditLogs.value = (auditResp.data?.list || []).slice(0, 6);
   } catch (error: any) {
     message(error?.message || "加载运行状态失败", { type: "error" });
   } finally {
     loading.value = false;
   }
-}
-
-function formatTime(value?: string) {
-  return value ? dayjs(value).format("YYYY-MM-DD HH:mm:ss") : "-";
 }
 
 onMounted(loadOverview);
@@ -102,38 +82,10 @@ onMounted(loadOverview);
         <template #header>说明</template>
         <div class="note">
           <p>当前页面的“运行状态”来自微服务健康检查和 CMDB 已登记资源统计。</p>
-          <p>页面下方会展示最近平台运维日志和操作审计。若要接入容器 stdout/stderr、文件日志或主机系统日志，可以继续对接 Loki、ELK 或日志 Agent。</p>
+          <p>更详细的运维日志请统一在日志中心查看；若要接入容器 stdout/stderr、文件日志或主机系统日志，可以继续对接 Loki、ELK 或日志 Agent。</p>
         </div>
       </el-card>
     </div>
-
-    <el-card shadow="never">
-      <template #header>最近运维日志</template>
-      <el-table :data="transferLogs" border>
-        <el-table-column label="时间" min-width="172">
-          <template #default="scope">{{ formatTime(scope.row.created_at) }}</template>
-        </el-table-column>
-        <el-table-column prop="action" label="动作" min-width="100" />
-        <el-table-column prop="mode" label="模式" min-width="100" />
-        <el-table-column prop="status" label="状态" min-width="100" />
-        <el-table-column prop="message" label="摘要" min-width="200" show-overflow-tooltip />
-        <el-table-column prop="detail" label="日志详情" min-width="320" show-overflow-tooltip />
-      </el-table>
-    </el-card>
-
-    <el-card shadow="never">
-      <template #header>最近操作审计</template>
-      <el-table :data="auditLogs" border>
-        <el-table-column label="时间" min-width="172">
-          <template #default="scope">{{ formatTime(scope.row.created_at) }}</template>
-        </el-table-column>
-        <el-table-column prop="username" label="用户" min-width="120" />
-        <el-table-column prop="method" label="方法" min-width="90" />
-        <el-table-column prop="path" label="路径" min-width="260" show-overflow-tooltip />
-        <el-table-column prop="operation" label="操作" min-width="180" />
-        <el-table-column prop="payload" label="请求参数" min-width="320" show-overflow-tooltip />
-      </el-table>
-    </el-card>
   </div>
 </template>
 

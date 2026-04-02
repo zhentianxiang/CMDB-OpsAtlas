@@ -7,7 +7,9 @@ import { hasPerms } from "@/utils/auth";
 import G6Topology from "./components/G6Topology.vue";
 import CmdbImportPanel from "./components/CmdbImportPanel.vue";
 import HostDetailPanel from "./components/HostDetailPanel.vue";
-import { formatValue, getColumnLabel, matchCluster, matchPort } from "./display";
+import CmdbResourceTable from "./components/CmdbResourceTable.vue";
+import CmdbTopologyToolbar from "./components/CmdbTopologyToolbar.vue";
+import { matchCluster, matchPort } from "./display";
 import {
   configs,
   resourcePermissionMap,
@@ -16,7 +18,6 @@ import {
   type PortDraft,
   type ResourceKey
 } from "./schema";
-import type { TableInstance } from "element-plus";
 import {
   createItem,
   deleteItem,
@@ -79,15 +80,16 @@ const props = withDefaults(
 
 const route = useRoute();
 const activeTab = ref<CmdbTab>(props.defaultTab);
-  const currentPage = ref(1);
-  const pageSize = ref(20);
-  const currentPageHostApps = ref(1);
-  const currentPageHostOutgoing = ref(1);
-  const currentPageHostIncoming = ref(1);const loading = ref(false);
+const currentPage = ref(1);
+const pageSize = ref(20);
+const currentPageHostApps = ref(1);
+const currentPageHostOutgoing = ref(1);
+const currentPageHostIncoming = ref(1);
+const loading = ref(false);
 const dialogVisible = ref(false);
 const editingId = ref<number | null>(null);
 const editingKey = ref<ResourceKey>("clusters");
-const tableRef = ref<TableInstance>();
+const tableRef = ref<{ clearSelection: () => void } | null>(null);
 const importInputRef = ref<HTMLInputElement | null>(null);
 const importDialogVisible = ref(false);
 const previewDrawerVisible = ref(false);
@@ -160,53 +162,54 @@ const activeConfig = computed(
 );
 
 
-  const allActiveRows = computed<any[]>(() => {
-    if (["host-detail", "topology"].includes(activeTab.value)) return [];
-    const key = activeTab.value as ResourceKey;
-    const keyword = searchState[key]?.trim();
-    if (!keyword) return listState[key] || [];
+const allActiveRows = computed<any[]>(() => {
+  if (["host-detail", "topology"].includes(activeTab.value)) return [];
+  const key = activeTab.value as ResourceKey;
+  const keyword = searchState[key]?.trim();
+  if (!keyword) return listState[key] || [];
 
-    if (key === "clusters") {
-      return listState.clusters.filter(item => matchCluster(item, keyword));
-    }
-    if (key === "ports") {
-      return listState.ports.filter(item => matchPort(item, keyword, appMap.value));
-    }
-    if (key === "hosts" || key === "apps" || key === "domains" || key === "dependencies") {
-      return searchResultState[key] || [];
-    }
-    return listState[key] || [];
-  });
+  if (key === "clusters") {
+    return listState.clusters.filter(item => matchCluster(item, keyword));
+  }
+  if (key === "ports") {
+    return listState.ports.filter(item => matchPort(item, keyword, appMap.value));
+  }
+  if (key === "hosts" || key === "apps" || key === "domains" || key === "dependencies") {
+    return searchResultState[key] || [];
+  }
+  return listState[key] || [];
+});
 
-  const activeRows = computed(() => {
-    const start = (currentPage.value - 1) * pageSize.value;
-    return allActiveRows.value.slice(start, start + pageSize.value);
-  });
+const activeRows = computed(() => {
+  const start = (currentPage.value - 1) * pageSize.value;
+  return allActiveRows.value.slice(start, start + pageSize.value);
+});
 
-  const hostMap = computed(() => {
-    const map = new Map<number, Host>();
-    listState.hosts.forEach(item => map.set(item.ID, item));
-    return map;
-  });
+const hostMap = computed(() => {
+  const map = new Map<number, Host>();
+  listState.hosts.forEach(item => map.set(item.ID, item));
+  return map;
+});
 
-  const paginatedHostApps = computed(() => {
-    if (!hostDetail.value) return [];
-    const start = (currentPageHostApps.value - 1) * pageSize.value;
-    return (hostDetail.value.apps || []).slice(start, start + pageSize.value);
-  });
+const paginatedHostApps = computed(() => {
+  if (!hostDetail.value) return [];
+  const start = (currentPageHostApps.value - 1) * pageSize.value;
+  return (hostDetail.value.apps || []).slice(start, start + pageSize.value);
+});
 
-  const paginatedHostOutgoing = computed(() => {
-    if (!hostDetail.value) return [];
-    const start = (currentPageHostOutgoing.value - 1) * pageSize.value;
-    return (hostDetail.value.calls_outgoing || []).slice(start, start + pageSize.value);
-  });
+const paginatedHostOutgoing = computed(() => {
+  if (!hostDetail.value) return [];
+  const start = (currentPageHostOutgoing.value - 1) * pageSize.value;
+  return (hostDetail.value.calls_outgoing || []).slice(start, start + pageSize.value);
+});
 
-  const paginatedHostIncoming = computed(() => {
-    if (!hostDetail.value) return [];
-    const start = (currentPageHostIncoming.value - 1) * pageSize.value;
-    return (hostDetail.value.calls_incoming || []).slice(start, start + pageSize.value);
-  });
-  const appMap = computed(() => {
+const paginatedHostIncoming = computed(() => {
+  if (!hostDetail.value) return [];
+  const start = (currentPageHostIncoming.value - 1) * pageSize.value;
+  return (hostDetail.value.calls_incoming || []).slice(start, start + pageSize.value);
+});
+
+const appMap = computed(() => {
   const map = new Map<number, AppItem>();
   listState.apps.forEach(item => map.set(item.ID, item));
   return map;
@@ -1175,43 +1178,24 @@ function getEntityIdForDomain(item: DomainItem) {
 
       <div v-loading="loading">
         <template v-if="activeTab !== 'host-detail' && activeTab !== 'topology'">
-          <div v-if="currentSearchKeyword.trim()" class="table-hint">
-            搜索“{{ currentSearchKeyword.trim() }}”命中 {{ allActiveRows.length }} 条
-          </div>
-          <el-table ref="tableRef" :data="activeRows" border row-key="ID" @selection-change="handleSelectionChange">
-            <el-table-column type="selection" width="48" align="center" />
-            <el-table-column
-              v-for="column in activeConfig.columns"
-              :key="column"
-              :prop="column"
-              :label="getColumnLabel(column)"
-              min-width="120"
-            >
-              <template #default="scope">
-                {{ formatValue(activeConfig.key, column, column === 'address' ? scope.row : scope.row[column], listState) }}
-              </template>
-            </el-table-column>
-            <el-table-column label="操作" fixed="right" width="160">
-              <template #default="scope">
-                <el-button v-if="canUpdateCurrent" link type="primary" @click="openEdit(scope.row)">编辑</el-button>
-                <el-popconfirm v-if="canDeleteCurrent" title="确认删除?" @confirm="handleDelete(scope.row)">
-                  <template #reference>
-                    <el-button link type="danger">删除</el-button>
-                  </template>
-                </el-popconfirm>
-              </template>
-            </el-table-column>
-          </el-table>
-            <div class="mt-4 flex justify-end">
-              <el-pagination
-                v-model:current-page="currentPage"
-                v-model:page-size="pageSize"
-                :total="allActiveRows.length"
-                :page-sizes="[10, 20, 50, 100]"
-                layout="total, sizes, prev, pager, next, jumper"
-              />
-            </div>
-          </template>
+          <CmdbResourceTable
+            ref="tableRef"
+            :active-config="activeConfig"
+            :current-search-keyword="currentSearchKeyword"
+            :all-active-rows="allActiveRows"
+            :active-rows="activeRows"
+            :list-state="listState"
+            :can-update-current="canUpdateCurrent"
+            :can-delete-current="canDeleteCurrent"
+            :current-page="currentPage"
+            :page-size="pageSize"
+            @selection-change="handleSelectionChange"
+            @edit="openEdit"
+            @delete="handleDelete"
+            @update:current-page="currentPage = $event"
+            @update:page-size="pageSize = $event"
+          />
+        </template>
 
         <template v-if="activeTab === 'host-detail'">
           <HostDetailPanel
@@ -1235,43 +1219,22 @@ function getEntityIdForDomain(item: DomainItem) {
         </template>
 
         <template v-if="activeTab === 'topology'">
-          <div class="mb-3 flex flex-wrap items-center gap-3">
-            <el-select filterable v-model="selectedClusterId" clearable placeholder="按集群筛选" style="width: 320px">
-              <el-option
-                v-for="item in listState.clusters"
-                :key="item.ID"
-                :label="item.name"
-                :value="item.ID"
-              />
-            </el-select>
-            <el-select filterable v-model="selectedTopologyHostId" clearable placeholder="按主机筛选链路" style="width: 320px">
-              <el-option
-                v-for="item in topologyHostOptions"
-                :key="item.ID"
-                :label="`${item.name} · ${item.private_ip || item.public_ip || item.ip || '-'}`"
-                :value="item.ID"
-              />
-            </el-select>
-            <el-select filterable v-model="selectedTopologyAppId" clearable placeholder="按应用筛选链路" style="width: 320px">
-              <el-option
-                v-for="item in topologyAppOptions"
-                :key="item.ID"
-                :label="`${item.name} · ${item.type || '未分类'}`"
-                :value="item.ID"
-              />
-            </el-select>
-            <el-select filterable v-model="selectedTopologyDomainId" clearable placeholder="按域名筛选链路" style="width: 360px">
-              <el-option
-                v-for="item in topologyDomainOptions"
-                :key="item.ID"
-                :label="item.domain"
-                :value="item.ID"
-              />
-            </el-select>
-            <el-button type="primary" @click="queryTopology">加载拓扑</el-button>
-            <el-button @click="resetTopologyFilters">清空筛选</el-button>
-            <el-tag type="info">支持拖拽节点、滚轮缩放、点击节点查看详情</el-tag>
-          </div>
+          <CmdbTopologyToolbar
+            :clusters="listState.clusters"
+            :topology-host-options="topologyHostOptions"
+            :topology-app-options="topologyAppOptions"
+            :topology-domain-options="topologyDomainOptions"
+            :selected-cluster-id="selectedClusterId"
+            :selected-topology-host-id="selectedTopologyHostId"
+            :selected-topology-app-id="selectedTopologyAppId"
+            :selected-topology-domain-id="selectedTopologyDomainId"
+            @update:selected-cluster-id="selectedClusterId = $event"
+            @update:selected-topology-host-id="selectedTopologyHostId = $event"
+            @update:selected-topology-app-id="selectedTopologyAppId = $event"
+            @update:selected-topology-domain-id="selectedTopologyDomainId = $event"
+            @query="queryTopology"
+            @reset="resetTopologyFilters"
+          />
 
           <G6Topology
             :hosts="listState.hosts"
