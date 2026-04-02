@@ -5,6 +5,8 @@ import { ElMessageBox } from "element-plus";
 import { message } from "@/utils/message";
 import { hasPerms } from "@/utils/auth";
 import G6Topology from "./components/G6Topology.vue";
+import CmdbImportPanel from "./components/CmdbImportPanel.vue";
+import HostDetailPanel from "./components/HostDetailPanel.vue";
 import { formatValue, getColumnLabel, matchCluster, matchPort } from "./display";
 import {
   configs,
@@ -677,30 +679,6 @@ async function handleImportFileChange(event: Event) {
   }
 }
 
-function getImportSummaryText(summary?: {
-  clusters: number;
-  hosts: number;
-  apps: number;
-  ports: number;
-  domains: number;
-  dependencies: number;
-}) {
-  if (!summary) return "-";
-  return `集群 ${summary.clusters} / 主机 ${summary.hosts} / 应用 ${summary.apps} / 端口 ${summary.ports} / 域名 ${summary.domains} / 依赖 ${summary.dependencies}`;
-}
-
-function getPreviewResourceLabel(resource: string) {
-  const labels: Record<string, string> = {
-    clusters: "集群",
-    hosts: "主机",
-    apps: "应用",
-    ports: "端口",
-    domains: "域名",
-    dependencies: "依赖"
-  };
-  return labels[resource] || resource;
-}
-
 async function runImport(mode: ImportMode) {
   if (!importPayload.value) {
     message("请先选择 JSON 文件", { type: "warning" });
@@ -1236,63 +1214,25 @@ function getEntityIdForDomain(item: DomainItem) {
           </template>
 
         <template v-if="activeTab === 'host-detail'">
-          <el-space>
-            <el-select filterable v-model="selectedHostId" placeholder="选择主机" style="width: 320px">
-              <el-option
-                v-for="item in listState.hosts"
-                :key="item.ID"
-                :label="item.name"
-                :value="item.ID"
-              />
-            </el-select>
-            <el-button type="primary" @click="queryHostDetail">查询</el-button>
-          </el-space>
-
-          <el-row class="mt-4" :gutter="16" v-if="hostDetail">
-            <el-col :span="8">
-              <el-card>
-                <b>主机</b>
-                <div class="mt-2">{{ hostDetail.host.name }} ({{ hostDetail.host.ip }})</div>
-              </el-card>
-            </el-col>
-            <el-col :span="8">
-              <el-card>
-                <b>集群</b>
-                <div class="mt-2">{{ hostDetail.cluster?.name || '-' }}</div>
-              </el-card>
-            </el-col>
-            <el-col :span="8">
-              <el-card>
-                <b>域名</b>
-                <div class="mt-2">{{ hostDetail.domains.join(', ') || '-' }}</div>
-              </el-card>
-            </el-col>
-              <el-col :span="12" class="mt-4">
-                <el-card>
-                  <b>应用列表</b>
-                  <div class="mt-2" v-for="app in paginatedHostApps" :key="app.id">
-                    {{ app.name }} [{{ app.ports.join(",") }}]
-                  </div>
-                  <el-pagination class="mt-2" v-model:current-page="currentPageHostApps" :page-size="pageSize" :total="hostDetail.apps.length" layout="prev, pager, next" small hide-on-single-page />
-                </el-card>
-              </el-col>
-              <el-col :span="12" class="mt-4">
-                <el-card>
-                  <b>调用关系</b>
-                  <div class="mt-2 text-sm text-gray-500 font-bold">出向：</div>
-                  <div v-for="(item, idx) in paginatedHostOutgoing" :key="`out-${idx}`">
-                    {{ formatDependencyEndpoint(item, "source") }} -> {{ formatDependencyEndpoint(item, "target") }} ({{ item.desc || "-" }})
-                  </div>
-                  <el-pagination class="mt-2" v-model:current-page="currentPageHostOutgoing" :page-size="pageSize" :total="hostDetail.calls_outgoing.length" layout="prev, pager, next" small hide-on-single-page />
-                  <div class="mt-2 text-sm text-gray-500 font-bold">入向：</div>
-                  <div v-for="(item, idx) in paginatedHostIncoming" :key="`in-${idx}`">
-                    {{ formatDependencyEndpoint(item, "source") }} -> {{ formatDependencyEndpoint(item, "target") }} ({{ item.desc || "-" }})
-                  </div>
-                  <el-pagination class="mt-2" v-model:current-page="currentPageHostIncoming" :page-size="pageSize" :total="hostDetail.calls_incoming.length" layout="prev, pager, next" small hide-on-single-page />
-                </el-card>
-              </el-col>
-            </el-row>
-          </template>
+          <HostDetailPanel
+            :hosts="listState.hosts"
+            :selected-host-id="selectedHostId"
+            :host-detail="hostDetail"
+            :page-size="pageSize"
+            :current-page-host-apps="currentPageHostApps"
+            :current-page-host-outgoing="currentPageHostOutgoing"
+            :current-page-host-incoming="currentPageHostIncoming"
+            :paginated-host-apps="paginatedHostApps"
+            :paginated-host-outgoing="paginatedHostOutgoing"
+            :paginated-host-incoming="paginatedHostIncoming"
+            :format-dependency-endpoint="formatDependencyEndpoint"
+            @update:selected-host-id="selectedHostId = $event"
+            @query="queryHostDetail"
+            @update:current-page-host-apps="currentPageHostApps = $event"
+            @update:current-page-host-outgoing="currentPageHostOutgoing = $event"
+            @update:current-page-host-incoming="currentPageHostIncoming = $event"
+          />
+        </template>
 
         <template v-if="activeTab === 'topology'">
           <div class="mb-3 flex flex-wrap items-center gap-3">
@@ -1394,37 +1334,6 @@ function getEntityIdForDomain(item: DomainItem) {
       </template>
     </el-dialog>
 
-    <el-dialog v-model="importDialogVisible" title="导入 JSON" width="620px">
-      <el-form label-width="110px">
-        <el-form-item label="导入文件">
-          <div class="import-file-box">
-            <div class="import-file-name">{{ importFilename || "未选择文件" }}</div>
-            <el-button @click="pickImportFile">选择 JSON 文件</el-button>
-          </div>
-        </el-form-item>
-        <el-form-item label="导入模式">
-          <el-radio-group v-model="importMode">
-            <el-radio label="append">追加导入</el-radio>
-            <el-radio label="overwrite">覆盖导入</el-radio>
-            <el-radio label="preview">预览差异</el-radio>
-          </el-radio-group>
-        </el-form-item>
-        <el-form-item label="说明">
-          <div class="import-help">
-            <div>追加导入：保留现有数据，只导入新内容，重复项会自动跳过。</div>
-            <div>覆盖导入：清空当前 CMDB 数据，再按 JSON 文件完整恢复。</div>
-            <div>预览差异：先分析 JSON 和当前库之间的差异，再决定是否执行覆盖或追加。</div>
-          </div>
-        </el-form-item>
-      </el-form>
-      <template #footer>
-        <el-button @click="importDialogVisible = false">取消</el-button>
-        <el-button type="primary" :disabled="!importPayload" @click="handleImportAction">
-          {{ importMode === "preview" ? "开始预览" : "开始导入" }}
-        </el-button>
-      </template>
-    </el-dialog>
-
     <el-drawer v-model="nodeDetailVisible" :title="nodeDetailTitle" size="38%">
       <el-descriptions :column="1" border>
         <el-descriptions-item v-for="item in nodeDetailRows" :key="item.label" :label="item.label">
@@ -1433,44 +1342,20 @@ function getEntityIdForDomain(item: DomainItem) {
       </el-descriptions>
     </el-drawer>
 
-    <el-drawer v-model="previewDrawerVisible" title="导入差异预览" size="52%">
-      <div class="preview-section" v-if="importPreview">
-        <el-card shadow="never">
-          <template #header>覆盖导入概览</template>
-          <div class="preview-summary-line">当前数据：{{ getImportSummaryText(importPreview.overwrite.current) }}</div>
-          <div class="preview-summary-line">导入文件：{{ getImportSummaryText(importPreview.overwrite.incoming) }}</div>
-        </el-card>
-
-        <el-card shadow="never">
-          <template #header>追加导入概览</template>
-          <div class="preview-summary-line">预计新增：{{ getImportSummaryText(importPreview.append.summary) }}</div>
-          <div class="preview-resource-list">
-            <div v-for="item in importPreview.append.resources" :key="item.resource" class="preview-resource-card">
-              <div class="preview-resource-title">
-                {{ getPreviewResourceLabel(item.resource) }}：新增 {{ item.add_count }}，跳过 {{ item.skip_count }}
-              </div>
-              <div v-if="item.add_items.length" class="preview-resource-block">
-                <div class="preview-resource-subtitle">新增示例</div>
-                <div v-for="(line, index) in item.add_items" :key="`add-${item.resource}-${index}`" class="preview-resource-item">
-                  {{ line }}
-                </div>
-              </div>
-              <div v-if="item.skip_items.length" class="preview-resource-block">
-                <div class="preview-resource-subtitle">跳过示例</div>
-                <div v-for="(line, index) in item.skip_items" :key="`skip-${item.resource}-${index}`" class="preview-resource-item muted">
-                  {{ line }}
-                </div>
-              </div>
-            </div>
-          </div>
-        </el-card>
-      </div>
-      <template #footer>
-        <el-button @click="previewDrawerVisible = false">关闭</el-button>
-        <el-button type="warning" :disabled="!importPayload" @click="runImport('append')">按追加导入</el-button>
-        <el-button type="danger" :disabled="!importPayload" @click="runImport('overwrite')">按覆盖导入</el-button>
-      </template>
-    </el-drawer>
+    <CmdbImportPanel
+      :dialog-visible="importDialogVisible"
+      :preview-drawer-visible="previewDrawerVisible"
+      :import-filename="importFilename"
+      :import-payload="importPayload"
+      :import-preview="importPreview"
+      :import-mode="importMode"
+      @update:dialog-visible="importDialogVisible = $event"
+      @update:preview-drawer-visible="previewDrawerVisible = $event"
+      @update:import-mode="importMode = $event"
+      @pick-file="pickImportFile"
+      @submit="handleImportAction"
+      @run-import="runImport"
+    />
   </div>
 </template>
 
@@ -1508,77 +1393,6 @@ function getEntityIdForDomain(item: DomainItem) {
 .form-tip {
   color: #5b6472;
   font-size: 13px;
-}
-
-.import-file-box {
-  width: 100%;
-  display: flex;
-  justify-content: space-between;
-  gap: 12px;
-  align-items: center;
-}
-
-.import-file-name {
-  flex: 1;
-  min-width: 0;
-  color: #334155;
-  word-break: break-all;
-}
-
-.import-help {
-  display: grid;
-  gap: 8px;
-  color: #5b6472;
-  font-size: 13px;
-  line-height: 1.6;
-}
-
-.preview-section {
-  display: grid;
-  gap: 16px;
-}
-
-.preview-summary-line {
-  color: #334155;
-  line-height: 1.8;
-}
-
-.preview-resource-list {
-  display: grid;
-  gap: 12px;
-}
-
-.preview-resource-card {
-  border: 1px solid #dbe5f0;
-  border-radius: 12px;
-  padding: 12px 14px;
-  background: #fbfdff;
-}
-
-.preview-resource-title {
-  font-weight: 600;
-  color: #1f2937;
-}
-
-.preview-resource-block {
-  margin-top: 10px;
-}
-
-.preview-resource-subtitle {
-  font-size: 12px;
-  color: #64748b;
-  margin-bottom: 6px;
-}
-
-.preview-resource-item {
-  font-size: 13px;
-  color: #334155;
-  line-height: 1.6;
-  word-break: break-all;
-}
-
-.preview-resource-item.muted {
-  color: #64748b;
 }
 
 .hidden-file-input {
