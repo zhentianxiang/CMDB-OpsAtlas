@@ -305,7 +305,52 @@ func (h *Handler) Delete(c *gin.Context) {
 		return
 	}
 
-	if err := h.DB.Unscoped().Delete(&host).Error; err != nil {
+	if err := h.DB.Transaction(func(tx *gorm.DB) error {
+		var appIDs []uint
+		if err := tx.Model(&models.App{}).
+			Where("host_id = ?", host.ID).
+			Pluck("id", &appIDs).Error; err != nil {
+			return err
+		}
+
+		// 删除主机时一并清理依赖它的应用、端口、域名和依赖关系，避免留下孤儿数据。
+		if len(appIDs) > 0 {
+			if err := tx.Unscoped().Where("app_id IN ?", appIDs).Delete(&models.Port{}).Error; err != nil {
+				return err
+			}
+			if err := tx.Unscoped().
+				Where("app_id IN ?", appIDs).
+				Or("host_id = ?", host.ID).
+				Delete(&models.Domain{}).Error; err != nil {
+				return err
+			}
+			if err := tx.Unscoped().
+				Where("source_app_id IN ?", appIDs).
+				Or("target_app_id IN ?", appIDs).
+				Or("source_host_id = ?", host.ID).
+				Or("target_host_id = ?", host.ID).
+				Delete(&models.Dependency{}).Error; err != nil {
+				return err
+			}
+			if err := tx.Unscoped().Where("id IN ?", appIDs).Delete(&models.App{}).Error; err != nil {
+				return err
+			}
+		} else {
+			if err := tx.Unscoped().
+				Where("host_id = ?", host.ID).
+				Delete(&models.Domain{}).Error; err != nil {
+				return err
+			}
+			if err := tx.Unscoped().
+				Where("source_host_id = ?", host.ID).
+				Or("target_host_id = ?", host.ID).
+				Delete(&models.Dependency{}).Error; err != nil {
+				return err
+			}
+		}
+
+		return tx.Unscoped().Delete(&host).Error
+	}); err != nil {
 		common.Error(c, http.StatusInternalServerError, "删除失败: "+err.Error())
 		return
 	}
