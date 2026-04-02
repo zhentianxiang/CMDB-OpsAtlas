@@ -5,6 +5,15 @@ import { ElMessageBox } from "element-plus";
 import { message } from "@/utils/message";
 import { hasPerms } from "@/utils/auth";
 import G6Topology from "./components/G6Topology.vue";
+import { formatValue, getColumnLabel, matchCluster, matchPort } from "./display";
+import {
+  configs,
+  resourcePermissionMap,
+  searchPlaceholders,
+  type CmdbTab,
+  type PortDraft,
+  type ResourceKey
+} from "./schema";
 import type { TableInstance } from "element-plus";
 import {
   createItem,
@@ -32,8 +41,6 @@ import {
   type PortItem
 } from "@/api/cmdb";
 
-type ResourceKey = "clusters" | "hosts" | "apps" | "ports" | "domains" | "dependencies";
-type CmdbTab = ResourceKey | "host-detail" | "topology";
 type TopologyClickPayload =
   | {
       nodeType: "host";
@@ -146,231 +153,6 @@ const searchResultState = reactive<{
   dependencies: null
 });
 
-type ResourceConfig = {
-  key: ResourceKey;
-  title: string;
-  path: string;
-  columns: string[];
-  fields: Array<{
-    key: string;
-    label: string;
-    type?: "text" | "number" | "checkbox" | "select";
-    required?: boolean;
-    nullable?: boolean;
-    optionsFrom?: "clusters" | "hosts" | "apps";
-    options?: Array<{
-      label: string;
-      value: string | number;
-    }>;
-  }>;
-};
-
-type PortDraft = {
-  port: number | null;
-  protocol: string;
-};
-
-const configs: ResourceConfig[] = [
-  {
-    key: "clusters",
-    title: "集群",
-    path: "/api/v1/clusters",
-    columns: ["ID", "name", "type", "env", "remark"],
-    fields: [
-      { key: "name", label: "名称", required: true },
-      { key: "type", label: "类型" },
-      { key: "env", label: "环境" },
-      { key: "remark", label: "备注" }
-    ]
-  },
-  {
-    key: "hosts",
-    title: "主机",
-    path: "/api/v1/hosts",
-    columns: ["ID", "name", "address", "cluster_id", "status", "remark"],
-    fields: [
-      { key: "name", label: "名称", required: true },
-      { key: "public_ip", label: "公网IP" },
-      { key: "private_ip", label: "内网IP" },
-      {
-        key: "cluster_id",
-        label: "集群",
-        type: "select",
-        optionsFrom: "clusters",
-        nullable: true
-      },
-      { key: "cpu", label: "CPU", type: "number" },
-      { key: "memory", label: "内存", type: "number" },
-      { key: "os", label: "操作系统" },
-      { key: "status", label: "状态" },
-      { key: "remark", label: "备注" }
-    ]
-  },
-  {
-    key: "apps",
-    title: "应用",
-    path: "/api/v1/apps",
-    columns: ["ID", "name", "host_id", "type", "version", "deploy_type", "remark"],
-    fields: [
-      { key: "name", label: "名称", required: true },
-      {
-        key: "host_id",
-        label: "主机",
-        type: "select",
-        optionsFrom: "hosts",
-        required: true
-      },
-      {
-        key: "type",
-        label: "类型",
-        type: "select",
-        options: [
-          { label: "WEB应用", value: "WEB应用" },
-          { label: "API服务", value: "API服务" },
-          { label: "后台服务", value: "后台服务" },
-          { label: "缓存", value: "缓存" },
-          { label: "关系型数据库", value: "关系型数据库" },
-          { label: "非关系型数据库", value: "非关系型数据库" },
-          { label: "消息队列", value: "消息队列" },
-          { label: "搜索引擎", value: "搜索引擎" },
-          { label: "日志存储", value: "日志存储" },
-          { label: "时序数据库", value: "时序数据库" },
-          { label: "对象存储", value: "对象存储" },
-          { label: "任务调度", value: "任务调度" },
-          { label: "网关", value: "网关" },
-          { label: "代理", value: "代理" },
-          { label: "监控", value: "监控" },
-          { label: "认证服务", value: "认证服务" },
-          { label: "配置中心", value: "配置中心" },
-          { label: "注册中心", value: "注册中心" },
-          { label: "其他", value: "其他" }
-        ]
-      },
-      { key: "version", label: "版本" },
-      {
-        key: "deploy_type",
-        label: "部署方式",
-        type: "select",
-        options: [
-          { label: "物理机", value: "物理机" },
-          { label: "虚拟机", value: "虚拟机" },
-          { label: "Docker", value: "Docker" },
-          { label: "Kubernetes", value: "Kubernetes" },
-          { label: "Serverless", value: "Serverless" },
-          { label: "二进制", value: "二进制" },
-          { label: "其他", value: "其他" }
-        ]
-      },
-      { key: "remark", label: "备注" }
-    ]
-  },
-  {
-    key: "ports",
-    title: "端口",
-    path: "/api/v1/ports",
-    columns: ["ID", "app_id", "port", "protocol", "is_public", "remark"],
-    fields: [
-      {
-        key: "host_id",
-        label: "主机",
-        type: "select",
-        optionsFrom: "hosts",
-        nullable: true
-      },
-      {
-        key: "app_id",
-        label: "应用",
-        type: "select",
-        optionsFrom: "apps",
-        required: true
-      },
-      { key: "port", label: "端口", type: "number", required: true },
-      {
-        key: "protocol",
-        label: "协议",
-        type: "select",
-        options: [
-          { label: "TCP", value: "TCP" },
-          { label: "UDP", value: "UDP" },
-          { label: "HTTP", value: "HTTP" },
-          { label: "HTTPS", value: "HTTPS" }
-        ]
-      },
-      { key: "is_public", label: "公网开放", type: "checkbox" },
-      { key: "remark", label: "备注" }
-    ]
-  },
-  {
-    key: "domains",
-    title: "域名",
-    path: "/api/v1/domains",
-    columns: ["ID", "domain", "app_id", "host_id", "remark"],
-    fields: [
-      { key: "domain", label: "域名", required: true },
-      { key: "host_id", label: "主机", type: "select", optionsFrom: "hosts", nullable: true },
-      { key: "app_id", label: "应用", type: "select", optionsFrom: "apps", nullable: true },
-      { key: "remark", label: "备注" }
-    ]
-  },
-  {
-    key: "dependencies",
-    title: "依赖",
-    path: "/api/v1/dependencies",
-    columns: [
-      "ID",
-      "source_app_id",
-      "target_app_id",
-      "domain_id",
-      "source_host_id",
-      "target_host_id",
-      "source_node",
-      "target_node",
-      "desc",
-      "remark"
-    ],
-    fields: [
-      {
-        key: "source_host_id",
-        label: "调用方主机",
-        type: "select",
-        optionsFrom: "hosts",
-        nullable: true
-      },
-      {
-        key: "source_app_id",
-        label: "调用方应用",
-        type: "select",
-        optionsFrom: "apps",
-        nullable: true
-      },
-      {
-        key: "domain_id",
-        label: "访问域名",
-        type: "select",
-        nullable: true
-      },
-      {
-        key: "target_host_id",
-        label: "被调用主机",
-        type: "select",
-        optionsFrom: "hosts",
-        nullable: true
-      },
-      {
-        key: "target_app_id",
-        label: "被调用应用",
-        type: "select",
-        optionsFrom: "apps",
-        nullable: true
-      },
-      { key: "source_node", label: "调用方外部节点", nullable: true },
-      { key: "target_node", label: "被调用外部节点", nullable: true },
-      { key: "desc", label: "描述" },
-      { key: "remark", label: "备注" }
-    ]
-  }
-];
-
 const activeConfig = computed(
   () => configs.find(item => item.key === activeTab.value) || configs[0]
 );
@@ -386,7 +168,7 @@ const activeConfig = computed(
       return listState.clusters.filter(item => matchCluster(item, keyword));
     }
     if (key === "ports") {
-      return listState.ports.filter(item => matchPort(item, keyword));
+      return listState.ports.filter(item => matchPort(item, keyword, appMap.value));
     }
     if (key === "hosts" || key === "apps" || key === "domains" || key === "dependencies") {
       return searchResultState[key] || [];
@@ -457,15 +239,7 @@ const topologyDomainOptions = computed(() => {
 });
 
 const searchPlaceholder = computed(() => {
-  const placeholders: Partial<Record<ResourceKey, string>> = {
-    clusters: "搜索集群名称 / 类型 / 环境",
-    hosts: "搜索主机名称 / 地址 / 集群 / 状态",
-    apps: "搜索应用名称 / 类型 / 版本 / 主机",
-    ports: "搜索端口 / 协议 / 应用",
-    domains: "搜索域名 / 应用 / 主机",
-    dependencies: "搜索源目标应用 / 主机 / 外部节点 / 描述"
-  };
-  return placeholders[activeTab.value as ResourceKey] || "搜索";
+  return searchPlaceholders[activeTab.value as ResourceKey] || "搜索";
 });
 
 const searchVisible = computed(() => activeTab.value !== "host-detail" && activeTab.value !== "topology");
@@ -489,39 +263,6 @@ const activeSelectionIds = computed<number[]>(() => {
 const canBatchDelete = computed(
   () => activeTab.value !== "host-detail" && activeTab.value !== "topology" && activeSelectionIds.value.length > 0
 );
-
-const resourcePermissionMap: Record<ResourceKey, { create: string; update: string; delete: string }> = {
-  clusters: {
-    create: "cmdb:cluster:create",
-    update: "cmdb:cluster:update",
-    delete: "cmdb:cluster:delete"
-  },
-  hosts: {
-    create: "cmdb:host:create",
-    update: "cmdb:host:update",
-    delete: "cmdb:host:delete"
-  },
-  apps: {
-    create: "cmdb:app:create",
-    update: "cmdb:app:update",
-    delete: "cmdb:app:delete"
-  },
-  ports: {
-    create: "cmdb:port:create",
-    update: "cmdb:port:update",
-    delete: "cmdb:port:delete"
-  },
-  domains: {
-    create: "cmdb:domain:create",
-    update: "cmdb:domain:update",
-    delete: "cmdb:domain:delete"
-  },
-  dependencies: {
-    create: "cmdb:dependency:create",
-    update: "cmdb:dependency:update",
-    delete: "cmdb:dependency:delete"
-  }
-};
 
 const canCreateCurrent = computed(() => {
   if (activeTab.value === "host-detail" || activeTab.value === "topology") return false;
@@ -726,109 +467,6 @@ function removePortDraft(index: number) {
   portDrafts.value.splice(index, 1);
 }
 
-function normalizeKeyword(value: string) {
-  return value.trim().toLowerCase();
-}
-
-function matchCluster(item: Cluster, keyword: string) {
-  const hit = normalizeKeyword(keyword);
-  return [item.name, item.type, item.env, item.remark].some(value =>
-    String(value || "")
-      .toLowerCase()
-      .includes(hit)
-  );
-}
-
-function matchPort(item: PortItem, keyword: string) {
-  const hit = normalizeKeyword(keyword);
-  const appName = appMap.value.get(item.app_id)?.name || "";
-  return [item.port, item.protocol, item.remark, appName, item.is_public ? "public" : "private"].some(value =>
-    String(value || "")
-      .toLowerCase()
-      .includes(hit)
-  );
-}
-
-function getColumnLabel(key: ResourceKey, column: string) {
-  const labels: Record<string, string> = {
-    ID: "ID",
-    name: "名称",
-    type: "类型",
-    env: "环境",
-    remark: "备注",
-    domain_id: "访问域名",
-    address: "地址",
-    cluster_id: "集群",
-    status: "状态",
-    host_id: "主机",
-    app_id: "应用",
-    version: "版本",
-    deploy_type: "部署方式",
-    port: "端口",
-    protocol: "协议",
-    is_public: "公网开放",
-    domain: "域名",
-    source_app_id: "源应用",
-    target_app_id: "目标应用",
-    source_host_id: "源主机",
-    target_host_id: "目标主机",
-    source_node: "源外部节点",
-    target_node: "目标外部节点",
-    desc: "说明",
-    ip: "IP",
-    public_ip: "公网IP",
-    private_ip: "内网IP",
-    cpu: "CPU",
-    memory: "内存",
-    os: "操作系统"
-  };
-  return labels[column] || column;
-}
-
-function formatValue(key: ResourceKey, column: string, value: any) {
-  if (key === "hosts" && column === "address") {
-    const row = value as any;
-    const segments = [
-      row?.private_ip ? `内网 ${row.private_ip}` : "",
-      row?.public_ip ? `公网 ${row.public_ip}` : "",
-      row?.ip && row?.ip !== row?.private_ip && row?.ip !== row?.public_ip ? `兼容 ${row.ip}` : ""
-    ].filter(Boolean);
-    return segments.join(" / ") || "-";
-  }
-  if (value === null || value === undefined || value === "") return "-";
-  if (typeof value === "boolean") return value ? "true" : "false";
-
-  if (key === "hosts" && column === "cluster_id") {
-    const hit = listState.clusters.find(item => item.ID === value);
-    return hit?.name || value;
-  }
-  if (key === "apps" && column === "host_id") {
-    const hit = listState.hosts.find(item => item.ID === value);
-    return hit?.name || value;
-  }
-  if (key === "ports" && column === "app_id") {
-    const hit = listState.apps.find(item => item.ID === value);
-    return hit?.name || value;
-  }
-  if (key === "domains" && (column === "host_id" || column === "app_id")) {
-    const source = column === "host_id" ? listState.hosts : listState.apps;
-    const hit = source.find(item => item.ID === value);
-    return hit?.name || value;
-  }
-  if (key === "dependencies" && column === "domain_id") {
-    const hit = listState.domains.find(item => item.ID === value);
-    return hit?.domain || value;
-  }
-  if (key === "dependencies" && column.endsWith("app_id")) {
-    const hit = listState.apps.find(item => item.ID === value);
-    return hit?.name || value;
-  }
-  if (key === "dependencies" && column.endsWith("host_id")) {
-    const hit = listState.hosts.find(item => item.ID === value);
-    return hit?.name || value;
-  }
-  return value;
-}
 
 function openCreate() {
   editingId.value = null;
@@ -1568,11 +1206,11 @@ function getEntityIdForDomain(item: DomainItem) {
               v-for="column in activeConfig.columns"
               :key="column"
               :prop="column"
-              :label="getColumnLabel(activeConfig.key, column)"
+              :label="getColumnLabel(column)"
               min-width="120"
             >
               <template #default="scope">
-                {{ formatValue(activeConfig.key, column, column === 'address' ? scope.row : scope.row[column]) }}
+                {{ formatValue(activeConfig.key, column, column === 'address' ? scope.row : scope.row[column], listState) }}
               </template>
             </el-table-column>
             <el-table-column label="操作" fixed="right" width="160">
